@@ -19,7 +19,7 @@
 
 /**
  * [Create CommonJS files]:
- * Compatible with prevoius folder structure: `echarts/lib` exists in `node_modules`
+ * Compatible with previous folder structure: `echarts/lib` exists in `node_modules`
  * (1) Build all files to CommonJS to `echarts/lib`.
  * (2) Remove __DEV__.
  * (3) Mount `echarts/src/export.js` to `echarts/lib/echarts.js`.
@@ -39,6 +39,7 @@ const transformDEVUtil = require('./transform-dev');
 const preamble = require('./preamble');
 const dts = require('@lang/rollup-plugin-dts').default;
 const rollup = require('rollup');
+const { transformImport } = require('zrender/build/transformImport.js');
 
 const ecDir = nodePath.resolve(__dirname, '..');
 const tmpDir = nodePath.resolve(ecDir, 'pre-publish-tmp');
@@ -66,6 +67,15 @@ const extensionSrcGlobby = {
 };
 const extensionSrcDir = nodePath.resolve(ecDir, 'extension-src');
 const extensionESMDir = nodePath.resolve(ecDir, 'extension');
+const ssrClientGlobby = {
+    patterns: [
+        'ssr/client/src/**/*.ts'
+    ],
+    cwd: ecDir
+};
+const ssrClientSrcDir = nodePath.resolve(ecDir, 'ssr/client/src');
+const ssrClientESMDir = nodePath.resolve(ecDir, 'ssr/client/lib');
+const ssrClientTypeDir = nodePath.resolve(ecDir, 'ssr/client/types');
 
 const typesDir = nodePath.resolve(ecDir, 'types');
 const esmDir = 'lib';
@@ -78,7 +88,7 @@ const compileWorkList = [
             module: 'ES2015',
             rootDir: ecDir,
             outDir: tmpDir,
-            // Generate types when buidling esm
+            // Generate types when building esm
             declaration: true,
             declarationDir: typesDir
         },
@@ -109,8 +119,8 @@ const compileWorkList = [
             transformRootFolderInEntry(nodePath.resolve(ecDir, 'index.common.js'), esmDir);
             transformRootFolderInEntry(nodePath.resolve(ecDir, 'index.simple.js'), esmDir);
 
-            await transformDistributionFiles(nodePath.resolve(ecDir, esmDir), esmDir);
-            await transformDistributionFiles(nodePath.resolve(ecDir, 'types'), esmDir);
+            await transformLibFiles(nodePath.resolve(ecDir, esmDir), esmDir);
+            await transformLibFiles(nodePath.resolve(ecDir, 'types'), esmDir);
             fsExtra.removeSync(tmpDir);
         }
     },
@@ -118,6 +128,7 @@ const compileWorkList = [
         logLabel: 'extension ts -> js-esm',
         compilerOptionsOverride: {
             module: 'ES2015',
+            declaration: false,
             rootDir: extensionSrcDir,
             outDir: extensionESMDir
         },
@@ -131,7 +142,28 @@ const compileWorkList = [
             fsExtra.removeSync(extensionESMDir);
         },
         after: async function () {
-            await transformDistributionFiles(extensionESMDir, 'lib');
+            await transformLibFiles(extensionESMDir, 'lib');
+        }
+    },
+    {
+        logLabel: 'ssr client ts -> js-esm',
+        compilerOptionsOverride: {
+            module: 'ES2015',
+            declaration: true,
+            rootDir: ssrClientSrcDir,
+            outDir: ssrClientESMDir,
+            declarationDir: ssrClientTypeDir
+        },
+        srcGlobby: ssrClientGlobby,
+        transformOptions: {
+            filesGlobby: {patterns: ['**/*.js'], cwd: ssrClientESMDir},
+            transformDEV: true
+        },
+        before: async function () {
+            fsExtra.removeSync(ssrClientESMDir);
+        },
+        after: async function () {
+            await transformLibFiles(ssrClientESMDir, 'lib');
         }
     }
 ];
@@ -176,7 +208,7 @@ module.exports = async function () {
 };
 
 async function runTsCompile(localTs, compilerOptions, srcPathList) {
-    // Must do it. becuase the value in tsconfig.json might be different from the inner representation.
+    // Must do it, because the value in tsconfig.json might be different from the inner representation.
     // For example: moduleResolution: "NODE" => moduleResolution: 2
     const {options, errors} = localTs.convertCompilerOptionsFromJson(compilerOptions, ecDir);
 
@@ -245,15 +277,15 @@ function transformRootFolderInEntry(entryFile, replacement) {
     fs.writeFileSync(
         entryFile,
         // Also transform zrender.
-        singleTransformZRRootFolder(code, replacement),
+        singleTransformImport(code, replacement),
         'utf-8'
     );
 }
 
 /**
- * Transform `zrender/src` to `zrender/esm` in all files
+ * Transform `zrender/src` to `zrender/lib` in all files
  */
-async function transformDistributionFiles(rooltFolder, replacement) {
+async function transformLibFiles(rooltFolder, replacement) {
     const files = await readFilePaths({
         patterns: ['**/*.js', '**/*.d.ts'],
         cwd: rooltFolder
@@ -262,7 +294,7 @@ async function transformDistributionFiles(rooltFolder, replacement) {
     // TODO More robust way?
     for (let fileName of files) {
         let code = fs.readFileSync(fileName, 'utf-8');
-        code = singleTransformZRRootFolder(code, replacement);
+        code = singleTransformImport(code, replacement);
         // For lower ts version, not use import type
         // TODO Use https://github.com/sandersn/downlevel-dts ?
         // if (fileName.endsWith('.d.ts')) {
@@ -272,8 +304,33 @@ async function transformDistributionFiles(rooltFolder, replacement) {
     }
 }
 
-function singleTransformZRRootFolder(code, replacement) {
-    return code.replace(/([\"\'])zrender\/src\//g, `$1zrender/${replacement}/`);
+/**
+ * 1. Transform zrender/src to zrender/lib
+ * 2. Add .js extensions
+ */
+function singleTransformImport(code, replacement) {
+    return transformImport(
+        code.replace(/([\"\'])zrender\/src\//g, `$1zrender/${replacement}/`),
+        (moduleName) => {
+            // Ignore 'tslib' and 'echarts' in the extensions.
+            if (moduleName === 'tslib' || moduleName === 'echarts') {
+                return moduleName;
+            }
+            else if (moduleName === 'zrender/lib/export') {
+                throw new Error('Should not import the whole zrender library.');
+            }
+            else if (moduleName.endsWith('.ts')) {
+                // Replace ts with js
+                return moduleName.replace(/\.ts$/, '.js');
+            }
+            else if (moduleName.endsWith('.js')) {
+                return moduleName;
+            }
+            else {
+                return moduleName + '.js'
+            }
+        }
+    );
 }
 
 // function singleTransformImportType(code) {
@@ -317,6 +374,7 @@ async function readFilePaths({patterns, cwd}) {
     );
 }
 
+// Bundle can be used in echarts-examples.
 async function bundleDTS() {
 
     const outDir = nodePath.resolve(__dirname, '../types/dist');
@@ -345,7 +403,7 @@ async function bundleDTS() {
 
     // Bundle chunks.
     const parts = [
-        'core', 'charts', 'components', 'renderers', 'option'
+        'core', 'charts', 'components', 'renderers', 'option', 'features'
     ];
     const inputs = {};
     parts.forEach(partName => {
@@ -387,14 +445,16 @@ function readTSConfig() {
 
 
 function generateEntries() {
-    ['charts', 'components', 'renderers', 'core'].forEach(entryName => {
-        if (entryName !== 'option') {
-            const jsCode = fs.readFileSync(nodePath.join(__dirname, `template/${entryName}.js`), 'utf-8');
-            fs.writeFileSync(nodePath.join(__dirname, `../${entryName}.js`), jsCode, 'utf-8');
+    ['charts', 'components', 'renderers', 'core', 'features', 'ssr/client/index'].forEach(entryPath => {
+        if (entryPath !== 'option') {
+            const jsCode = fs.readFileSync(nodePath.join(__dirname, `template/${entryPath}.js`), 'utf-8');
+            fs.writeFileSync(nodePath.join(__dirname, `../${entryPath}.js`), jsCode, 'utf-8');
         }
 
-        const dtsCode = fs.readFileSync(nodePath.join(__dirname, `/template/${entryName}.d.ts`), 'utf-8');
-        fs.writeFileSync(nodePath.join(__dirname, `../${entryName}.d.ts`), dtsCode, 'utf-8');
+        // Make the d.ts in the same dir as .js, so that the can be found by tsc.
+        // package.json "types" in "exports" does not always seam to work.
+        const dtsCode = fs.readFileSync(nodePath.join(__dirname, `/template/${entryPath}.d.ts`), 'utf-8');
+        fs.writeFileSync(nodePath.join(__dirname, `../${entryPath}.d.ts`), dtsCode, 'utf-8');
     });
 }
 

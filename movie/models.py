@@ -131,3 +131,6 @@ class LikeComment(models.Model):
     class Meta:
         verbose_name = "评论点赞"
         verbose_name_plural = verbose_name
+
+class Progress(models.Model):
+    progress = models.IntegerField(default=0) # 存储进度的整数字段

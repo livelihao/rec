@@ -3,7 +3,7 @@
         <el-card>
             <template #header>
                 <div class="card-header">
-                    <span>电影分类</span>
+                    <span>电影-分类</span>
                 </div>
             </template>
             <div class="tags">

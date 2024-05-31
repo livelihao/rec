@@ -2,10 +2,12 @@ import json
 import random
 from functools import wraps
 
+from celery import Celery
+
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Q, Count
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
@@ -16,6 +18,8 @@ from movie_it.recommend_movies import recommend_by_user_id, recommend_by_item_id
 from .forms import *
 from index.utils import success, error
 
+from movie_it.neuralcf import train, get_param
+from movie.tasks import test_train_model
 
 def movies_paginator(movies, page):
     paginator = Paginator(movies, 12)
@@ -248,6 +252,88 @@ def all_tags(request):
     # 所有标签
     tags = Tags.objects.all()
     return success(to_dict(tags))
+
+# @shared_task
+# def async_train(config):
+#     res_mse, res_rmse = train(config=config)
+#     return {'mse': res_mse, 'rmse': res_rmse}
+
+def get_train_neurCF(request):
+    config = {'alias': '',
+              'num_epoch': 5,
+              'batch_size': 4096,
+              'embed_dim':100,
+              'hidden_dims':[64,32,16,8],
+              'optimizer': 'adam',
+              'adam_lr': 1e-3,
+              'num_users': 6040,
+              'num_items': 3952,
+              'latent_dim': 8,
+              'num_negative': 4,
+              'l2_regularization': 0,  # 0.01
+              'weight_init_gaussian': True,
+              'use_cuda': False,
+              'device_id': 0,
+              'model_dir': './logs/NeuralCF{}_Epoch{}_MSE{:.4f}_RMSE{:.4f}.model'}
+    res_mse, res_rmse = train(config=config, model="NeuralCF")
+    data = {
+        "Code": 200,
+        'mse': res_mse,
+        'rmse': res_rmse
+    }
+    return HttpResponse(json.dumps(data), content_type="application/json")
+
+def get_model_params(request):
+    config = {'alias': '',
+              'num_epoch': 5,
+              'batch_size': 4096,
+              'embed_dim':100,
+              'hidden_dims':[64,32,16,8],
+              'optimizer': 'adam',
+              'adam_lr': 1e-3,
+              'num_users': 6040,
+              'num_items': 3952,
+              'latent_dim': 8,
+              'num_negative': 4,
+              'l2_regularization': 0,  # 0.01
+              'weight_init_gaussian': True,
+              'use_cuda': False,
+              'device_id': 0,
+              'model_dir': './logs/NeuralCF{}_Epoch{}_MSE{:.4f}_RMSE{:.4f}.model'}
+    rat, param_NeurCF, param_TensNet  = get_param(config)
+    data = {
+        "Code": 200,
+        'rat': rat,
+        'param_NeurCF': param_NeurCF,
+        'param_TensNet': param_TensNet
+    }
+    return HttpResponse(json.dumps(data), content_type="application/json")
+
+def get_train_TensNet(request):
+    config = {'alias': '',
+              'num_epoch': 5,
+              'batch_size': 4096,
+              'embed_dim':100,
+              'hidden_dims':[64,32,16,8],
+              'optimizer': 'adam',
+              'adam_lr': 1e-3,
+              'num_users': 6040,
+              'num_items': 3952,
+              'latent_dim': 8,
+              'num_negative': 4,
+              'l2_regularization': 0,  # 0.01
+              'weight_init_gaussian': True,
+              'use_cuda': False,
+              'device_id': 0,
+              'model_dir': './logs/NeuralCF{}_Epoch{}_MSE{:.4f}_RMSE{:.4f}.model'}
+    res_mse, res_rmse = train(config=config, model="TensNet")
+    data = {
+        "Code": 200,
+        'mse': res_mse,
+        'rmse': res_rmse
+    }
+    return HttpResponse(json.dumps(data), content_type="application/json")
+
 
 
 def score(request, movie_id):

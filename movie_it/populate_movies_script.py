@@ -4,7 +4,7 @@ import re
 
 import django
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "movie.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "movierecomend.settings")
 
 django.setup()
 from movie.models import Movie, Tags

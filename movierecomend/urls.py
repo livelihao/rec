@@ -33,6 +33,12 @@ urlpatterns = [
         path("user_recommend/", views.user_recommend,
              name="user_recommend"),  # 用户推荐
         path("all_tags/", views.all_tags, name="all_tags"),
+
+        path("get_train_NeurCF/", views.get_train_neurCF, name="get_train_neurCF"),
+        path("get_train_TensNet/", views.get_train_TensNet, name="get_train_TensNet"),
+        path("get_model_params/", views.get_model_params, name="get_model_params"),
+        
+        
         path("movie/<int:movie_id>/", views.movie, name="movie"),
         path("item_recommend/", views.item_recommend,
              name="item_recommend"),  # 物品推荐

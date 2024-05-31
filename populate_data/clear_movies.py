@@ -6,7 +6,7 @@ import django
 # 清空数据库中的电影数据和标签数据
 #
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "movie.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "movierecomend.settings")
 
 django.setup()
 

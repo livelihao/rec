@@ -14,7 +14,7 @@ from rest_framework.renderers import JSONRenderer
 from movie_it.cache_keys import USER_CACHE, ITEM_CACHE
 from movie_it.recommend_movies import recommend_by_user_id, recommend_by_item_id
 from .forms import *
-
+from movie_it.neuralcf import train
 
 def movies_paginator(movies, page):
     paginator = Paginator(movies, 12)
@@ -170,8 +170,23 @@ def search(request):  # 搜索
 
 #所有标签
 def all_tags(request):
+    '''
+    定义了一个名为 all_tags 的函数，它接收一个名为 request 的参数。这个 request 对象包含了当前的 HTTP 请求信息，是 Django 处理视图时自动提供的。
+    调用 Django 的 ORM（对象关系映射）来从数据库中获取 Tags 模型的所有实例。Tags.objects.all() 返回一个包含所有 Tags 实例的查询集（queryset）。
+    使用 Django 的 render 函数来创建一个 HTTP 响应。render 函数接收三个参数：
+
+    request：当前的 HTTP 请求对象。
+    "all_tags.html"：用于渲染响应的模板文件名。这个文件应该位于 Django 项目的模板目录中。
+    {'all_tags': tags}：一个字典，作为上下文传递给模板。这里，键 'all_tags' 对应的值是前面从数据库检索到的 tags 查询集，模板中可以使用这个变量来访问所有标签的数据。
+    总之，这个视图的主要作用是从数据库中获取所有的标签，然后通过 all_tags.html 模板将它们显示出来。这使得可以在前端展示所有的标签数据。
+    '''
     tags = Tags.objects.all()
     return render(request, "all_tags.html", {'all_tags': tags})
+s
+# def get_train(request):
+#     # res1,res2 = train()
+#     test = {"abc":111}
+#     return HttpResponse(json.dumps(test), content_type="application/json")
 
 #一个标签
 def one_tag(request, one_tag_id):

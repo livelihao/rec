@@ -1,10 +1,10 @@
-import os
+import os, math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 import torch.optim as optim
-from metrics import MetronAtK
+# from metrics import MetronAtK
 
 from copy import deepcopy
 import random
@@ -27,6 +27,55 @@ class NeuralCF(nn.Module):
         input_dim = 2 * embed_dim
         for dim in hidden_dims:
             self.fc_layers.append(nn.Linear(input_dim, dim))
+            input_dim = dim
+        self.output_layer = nn.Linear(input_dim, 1)
+
+    def forward(self, user_ids, item_ids):
+        user_embed = self.user_embedding(user_ids)
+        item_embed = self.item_embedding(item_ids)
+        x = torch.cat([user_embed, item_embed], dim=-1)
+        for layer in self.fc_layers:
+            x = F.relu(layer(x))
+        x = self.output_layer(x)
+        return x
+
+class CPLayer(nn.Module):
+    def __init__(self, input_dim, output_dim, rank):
+        super(CPLayer, self).__init__()
+        self.rank = rank
+        self.factor_input = nn.Parameter(torch.randn(input_dim, rank))
+        self.factor_output = nn.Parameter(torch.randn(output_dim, rank))
+        self.weight = nn.Parameter(torch.ones(rank))
+
+        # 初始化
+        nn.init.kaiming_uniform_(self.factor_input, a=math.sqrt(5))
+        nn.init.kaiming_uniform_(self.factor_output, a=math.sqrt(5))
+        nn.init.constant_(self.weight, 0.1)
+
+    def forward(self, x):
+        # 张量乘积操作
+        interaction = torch.matmul(x, self.factor_input)  # [batch_size, rank]
+        interaction = interaction * self.weight  # 广播权重
+        output = torch.matmul(interaction, self.factor_output.t())  # [batch_size, output_dim]
+        return F.relu(output)  # 添加ReLU非线性
+
+class TensorNet(nn.Module):
+    def __init__(self, config):
+        super(TensorNet, self).__init__()
+        num_users = config['num_users']
+        num_items = config['num_items']
+        embed_dim = config['embed_dim']
+        hidden_dims = config['hidden_dims']
+
+        self.user_embedding = nn.Embedding(num_users + 1, embed_dim)
+        self.item_embedding = nn.Embedding(num_items + 1, embed_dim)
+        self.fc_layers = nn.ModuleList()
+        
+        rank = 4 
+
+        input_dim = 2 * embed_dim
+        for dim in hidden_dims:
+            self.fc_layers.append(CPLayer(input_dim, dim, rank=rank))
             input_dim = dim
         self.output_layer = nn.Linear(input_dim, 1)
 
@@ -105,6 +154,14 @@ class NeuCFEngine(Engine):
             self.model.cuda()
         super(NeuCFEngine, self).__init__(config)
 
+class TensNetEngine(Engine):
+    def __init__(self, config):
+        self.model = TensorNet(config)
+        if config['use_cuda'] is True:
+            use_cuda(True, config['device_id'])
+            self.model.cuda()
+        super(TensNetEngine, self).__init__(config)
+
 
 def use_optimizer(network, params):
     if params['optimizer'] == 'sgd':
@@ -134,8 +191,8 @@ def use_cuda(enabled, device_id=0):
         assert torch.cuda.is_available(), 'CUDA is not available'
         torch.cuda.set_device(device_id)
     
-def train(config):
-    user_ids, item_ids, ratings = load_data('./ratings.dat')
+def train(config, model):
+    user_ids, item_ids, ratings = load_data('C:\\Users\\livehao\\Downloads\\code\\code\\movie_it\\ratings.dat')
     # max_user_id = max(user_ids)
     # max_item_id = max(item_ids)
     # print("Max user ID:", max_user_id)
@@ -153,18 +210,61 @@ def train(config):
     train_loader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=config['batch_size'], shuffle=False)
 
-    engine = NeuCFEngine(config)
+    if model == 'NeuralCF':
+        engine = NeuCFEngine(config)
+    else:
+        engine = TensNetEngine(config)
     
-    res_mse, res_rmse = 10, 10 
+    res_mse, res_rmse = [], []
 
     for epoch in range(config['num_epoch']):
         print('Epoch {} starts !'.format(epoch))
         print('-' * 80)
         engine.train_an_epoch(train_loader, epoch_id=epoch)
         mse, rmse = engine.evaluate(test_loader, epoch_id=epoch)  # Assuming `evaluate` accepts a DataLoader
-        engine.save(config['alias'], epoch, mse, rmse)
-        res_mse, res_rmse = mse, rmse
+        # engine.save(config['alias'], epoch, mse, rmse)
+
+        res_mse.append(format(mse, ".5f"))
+        res_rmse.append(format(rmse, ".5f"))
     return res_mse, res_rmse
+
+def count_parameters(model, trainable_only=True):
+    """
+    计算模型的参数量。
+    
+    参数:
+    model (torch.nn.Module): 需要计算参数量的模型。
+    trainable_only (bool): 如果为True，则只计算可训练的参数。
+    
+    返回:
+    total_params (int): 模型的总参数量。
+    """
+    total_params = 0
+    for name, param in model.named_parameters():
+        # 检查这些参数是否属于嵌入层
+        if 'embedding' not in name:
+            if trainable_only and param.requires_grad:
+                total_params += param.numel()
+            elif not trainable_only:
+                total_params += param.numel()
+    return total_params
+
+def count_NeurCF(config):
+    model = NeuralCF(config)
+    return count_parameters(model)
+
+def count_TensNet(config):
+    model = TensorNet(config)
+    return count_parameters(model)
+
+def get_param(config):
+    param_TensNet = count_TensNet(config)
+    param_NeurCF = count_NeurCF(config)
+    
+    rat = (param_NeurCF - param_TensNet) / param_NeurCF * 100
+    rat = format(rat, ".2f")
+    return float(rat), param_NeurCF, param_TensNet
+
 
 class RatingDataset(Dataset):
     def __init__(self, user_ids, item_ids, ratings):
@@ -184,7 +284,7 @@ def load_data(file_path):
     
 if __name__ == '__main__':
     config = {'alias': '',
-              'num_epoch': 20,
+              'num_epoch': 5,
               'batch_size': 4096,
               'embed_dim':100,
               'hidden_dims':[64,32,16,8],
@@ -199,6 +299,13 @@ if __name__ == '__main__':
               'use_cuda': False,
               'device_id': 0,
               'model_dir': './logs/NeuralCF{}_Epoch{}_MSE{:.4f}_RMSE{:.4f}.model'}
-    # res_mse, res_rmse = train(config=config)
+    # res_mse, res_rmse = train(config=config, model='TensNet')
     res_mse, res_rmse = 1.0, 0.8
-    print("res_mse, res_rmse = " , res_mse , ", " , res_rmse)
+    print("res_mse, res_rmse = " )
+    print(res_mse)
+    print(res_rmse)
+
+    print(count_NeurCF(config=config))
+    print(count_TensNet(config=config))
+    
+    print(get_param(config=config))
