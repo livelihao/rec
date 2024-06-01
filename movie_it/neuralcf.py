@@ -192,7 +192,10 @@ def use_cuda(enabled, device_id=0):
         torch.cuda.set_device(device_id)
     
 def train(config, model):
-    user_ids, item_ids, ratings = load_data('C:\\Users\\livehao\\Downloads\\code\\code\\movie_it\\ratings.dat')
+    user_ids, item_ids, ratings = load_data('/home/sdust307/Disk2/lh/rec/movie_it/ratings.dat')
+
+    # /home/sdust307/Disk2/lh/rec/movie_it/ratings.dat
+
     # max_user_id = max(user_ids)
     # max_item_id = max(item_ids)
     # print("Max user ID:", max_user_id)

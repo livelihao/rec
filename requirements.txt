@@ -14,7 +14,7 @@ djangorestframework==3.9.1
 greenlet==1.1.0
 idna==2.10
 idna-ssl==1.1.0
-importlib-metadata==4.0.1
+importlib-metadata
 lxml==4.6.3
 multidict==5.1.0
 pytz==2022.1
@@ -25,4 +25,11 @@ typing_extensions==4.1.1
 yarl==1.7.2
 zipp==3.7.0
 requests
-torch
+celery
+pandas
+transformers
+tqdm
+numpy
+sentencepiece
+pyyaml
+scikit-learn
