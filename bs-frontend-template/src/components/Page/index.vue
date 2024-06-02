@@ -1,10 +1,10 @@
 <template>
-    <div class="x-container">
+     <div class="x-container">
         <div class="inner">
             <div class="content">
                 <slot />
             </div>
-            <div class="right">
+           <!-- <div class="right">
                 <slot name="right">
                     <el-card class="recent" shadow="always">
                         <template #header>
@@ -51,7 +51,7 @@
                         </div>
                     </el-card>
                 </slot>
-            </div>
+           </div> -->
         </div>
     </div>
 </template>

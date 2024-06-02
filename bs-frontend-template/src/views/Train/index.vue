@@ -115,9 +115,9 @@ export default {
                 res2: []
             },
             paraCount: {
-                reductionPercentage: 0,
-                ParamsNeurCF: 0,
-                ParamsTensNet: 0,
+                reductionPercentage: 88.78,
+                ParamsNeurCF: 15617,
+                ParamsTensNet: 1753,
             },
 
             resultsNeuralCFTemp: [],

@@ -1,0 +1,1 @@
+import{l as e,q as c,A as s,y as t,x as r}from"./element-plus.98b962cc.js";const a={},_={style:{padding:"30px"}};function l(i,p){const o=e("vue-echarts"),n=e("el-row");return c(),s("div",_,[t(n,{type:"flex",justify:"center"},{default:r(()=>[t(o,{api:"/fl/line/",style:{height:"700px"}})]),_:1})])}a.render=l;export{a as default};

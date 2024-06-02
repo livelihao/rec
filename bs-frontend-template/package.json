@@ -2,6 +2,7 @@
   "author": "hsianglee",
   "name": "element-plus-admin",
   "version": "0.0.0",
+  "description": "123",
   "scripts": {
     "dev": "vite",
     "build": "vuedx-typecheck . && vite build --emptyOutDir",
@@ -69,5 +70,6 @@
   "eslintIgnore": [
     "node_modules",
     "dist"
-  ]
+  ],
+  "private": true
 }

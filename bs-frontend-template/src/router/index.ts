@@ -38,6 +38,7 @@ function toMenu(arg: Arg): IMenubarList {
 export const allowRouter: Array<IMenubarList> = [
     toMenu({ name: "Index", title: "首页", home: true }),
     toMenu({ name: "Train", title: "训练", home: false }),
+    toMenu({ name: "SelectModel", title: "选择模型", home: false }),
     toMenu({ name: "Tag", title: "标签", home: false }),
     {
         name: 'ChooseTag_',
